@@ -1,11 +1,12 @@
 from langchain_core.messages import HumanMessage, SystemMessage
-from models.schema_models import SensitivityLevel
+from src.models.schema_models import SensitivityLevel
 from src.graph.state import AgentState, DataMetadata
 from langchain_ollama import ChatOllama
 from src.helpers.config import get_settings
 import json
 from datetime import datetime, timezone
-from data_connectors.DataConnectorFactory import DataConnectorFactory
+from src.data_connectors.DataConnectorFactory import DataConnectorFactory
+from pprint import pprint
 
 
 
@@ -14,20 +15,29 @@ settings = get_settings()
 
 
 DATA_PROFILER_SYSTEM_PROMPT = """
-You are a Data Structural Profiler. Your goal is to analyze a dataset's schema and sample data to provide structural metadata.
+You are an expert Data Structural Profiler and AI Readiness Auditor. Your goal is to analyze the dataset's schema, sample rows, 
+and structural properties to extract technical metadata while actively screening for data governance gaps, compliance risks, 
+and structural blockers that could cause AI pipelines or models to fail.
 
-Your output MUST be a JSON object with the following fields:
+### Instructions:
+1. Examine the provided data sample, headers, and schema carefully.
+2. Evaluate structural readiness and potential data governance flags (such as raw PII exposure risks, or unstructured data hazards).
+3. Output **ONLY** a valid JSON object matching the schema below. Do not include markdown code blocks, conversational text, or outside explanations.
+
+### Required JSON Output Schema:
 {
-  "name": "The best descriptive name for this dataset",
-  "description": "A technical summary of what this data contains (no governance scores)",
-  "file_type": "The detected format (e.g., csv, json, postgres_table)",
-  "modality": "Classify as: structured, semi_structured, unstructured, or media",
-  "structure": "A technical representation (e.g., column names and types, or JSON hierarchy)",
-  "tags": ["list", "of", "relevant", "keywords"],
-  "data_lineage": ["origin details or source name"]
+  "name": "A concise, descriptive name for the dataset based on its contents",
+  "description": "A technical summary of the dataset's domain, records, and structural layout",
+  "file_type": "The detected format (e.g., csv, json, parquet, xlsx, postgres_table)",
+  "modality": "Must be strictly one of: structured, semi_structured, unstructured, media",
+  "structure": "A detailed representation of columns and data types or JSON hierarchy",
+  "tags": ["3 to 5 relevant technical keywords or domain tags"],
+  "data_lineage": ["Origin details, source filename, or connection identifier"],
+  "governance_assessment": {
+    "contains_potential_pii": true or false,
+    "pii_risk_fields": ["List any column names that look like sensitive identifiers, emails, names, or phones, or empty list"],
+  }
 }
-
-Do not provide governance scores, sensitivity ratings, or security alerts. Focus strictly on structural and descriptive data.
 """
 
 
@@ -51,10 +61,12 @@ def parse_metadata_json(raw_json: str) -> DataMetadata:
             modality=data.get("modality", ""),
             structure=data.get("structure", {}),
             data_lineage=data.get("data_lineage", []),
-            sensitivity_lvl=SensitivityLevel.INTERNAL,  
+            sensitivity_lvl=SensitivityLevel.INTERNAL.value, 
+            governance_assessment=data.get("governance_assessment", {}), 
             tags=data.get("tags", []),
             size_bytes=0,
             created_at=datetime.now(timezone.utc).isoformat()
+
         )
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON format: {e}")
@@ -62,6 +74,7 @@ def parse_metadata_json(raw_json: str) -> DataMetadata:
     
 
 def data_profiler_node(state: AgentState) -> dict:
+    print(f"\n[INFO] Profiling data source: {state.get('data_source')}")
     llm = build_profiler_llm().bind(format="json")
     
     connector = DataConnectorFactory.getConnector(
@@ -70,8 +83,7 @@ def data_profiler_node(state: AgentState) -> dict:
     )
     
     raw_schema = connector.get_full_metadata()
-    table_name = list(raw_schema.keys())[0] if raw_schema else "dataset"
-    sample = connector.get_sample(table_name=table_name, limit=5)
+    sample = connector.get_sample()
     
 
     messages = [
@@ -94,7 +106,10 @@ def data_profiler_node(state: AgentState) -> dict:
             "messages" : messages + [response]
         }
     
-    metadata.size_bytes = sum(table.get("size_bytes",0) for table in raw_schema.values())
+    metadata.size_bytes = sum(getattr(table, "size_bytes", 0) for table in raw_schema.values())
+
+    print(f"\n[INFO] Data profiling completed for: {state.get('data_source')}")
+    pprint(f"{metadata}")
 
     return {
         "metadata" : metadata,

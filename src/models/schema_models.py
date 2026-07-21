@@ -7,7 +7,7 @@ class ColumnInfo:
     name : str
     data_type : str
     is_nullable : bool
-    comment : Optional[str] = Field(default="")
+    comment : Optional[str] = None
 
 
 

@@ -5,6 +5,12 @@ from src.models.schema_models import ColumnInfo, TableMetadata
 
 class FileConnector(BaseConnector):
     def __init__(self, file_path):
+        if not os.path.isfile(file_path):
+            print(os.path.exists(file_path))
+            print(os.path.isfile(file_path))
+            print(f"the working directory is: {os.getcwd()}")
+            print("target path check", os.path.abspath(file_path))
+            raise ValueError(f"File does not exist: {file_path}")
         self.file_path = file_path
         self.file_type = self._determine_file_type()
         self.reader = self._get_reader()
@@ -45,7 +51,7 @@ class FileConnector(BaseConnector):
         keys = self.reader.parse()
         return {os.path.basename(self.file_path) : TableMetadata(
             table_name=os.path.basename(self.file_path),
-            columns=[ColumnInfo(name=key, data_type="Unknown", nullable=True) for key in keys],
+            columns=[ColumnInfo(name=key, data_type=value, is_nullable=True) for key, value in keys.items()],
             foreign_keys=[],
             row_count=len(self.reader.read()),
             size_bytes=os.path.getsize(self.file_path)

@@ -43,6 +43,8 @@ class DataMetadata:
     data_lineage : list[str]
     sensitivity_lvl : SensitivityLevel
     tags  : list[str]
+    governance_assessment : Any
+
 
     size_bytes : int
     created_at : str

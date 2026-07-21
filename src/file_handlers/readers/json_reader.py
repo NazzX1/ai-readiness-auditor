@@ -1,9 +1,9 @@
 import os
 import json
 import uuid
-from file_handlers.readers.base_reader import BaseFileReader
-from helpers.utils import flatten_json
-from helpers.config import get_settings
+from src.file_handlers.readers.base_reader import BaseFileReader
+from src.helpers.utils import flatten_json
+from src.helpers.config import get_settings
 from pathlib import Path
 
 
@@ -24,8 +24,8 @@ class JSONReader(BaseFileReader):
         with open(self.file_path) as f:
             data = json.load(f)
         if isinstance(data, dict):
-            keys = [str(key) for key in data.keys()]
-            return keys
+            column_types = {str(key): type(value).__name__ for key, value in data.items()}
+            return column_types
 
 
     def filter(self, kept_keys):

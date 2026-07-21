@@ -37,8 +37,6 @@ class PostgresConnector(BaseConnector):
         foreign_keys = self.inspector.get_foreign_keys(table_name=table_name, schema=schema)
 
         cols_res = self.inspector.get_columns(table_name=table_name, schema=schema)
-        print("===> from function:\n")
-        print(cols_res)
         columns = [ColumnInfo(c.get("name"), c.get("type"), c.get("nullable"), c.get("comment", "")) for c in cols_res]
 
         stats = self._get_table_stats(table_name=table_name)
@@ -51,12 +49,19 @@ class PostgresConnector(BaseConnector):
 
 
 
-    def get_sample(self, table_name : str, percentage : float = 0.1):
-        query = text(f'select * from {table_name} TABLESAMPLE SYSTEM(:p)')
+    def get_sample_from_table(self, table_name : str, percentage : float = 0.1):
+        query = text(f'select * from "{table_name}" TABLESAMPLE SYSTEM(:p)')
         with self.engine.connect() as conn:
             results = conn.execute(query, {"p": percentage}).fetchall()
             return [dict(row) for row in results]
         
+
+    def get_sample(self):
+        tables = self.get_all_tables_or_collections()
+        samples = {}
+        for table in tables:
+            samples[table] = self.get_sample_from_table(table)
+        return samples
     
 
 

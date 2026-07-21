@@ -64,7 +64,7 @@ class MongoConnector(BaseConnector):
         return [ColumnInfo(name=key, data_type="dynamic", is_nullable=True, comment="") 
                 for key in sorted(all_keys)]
     
-    def get_sample(self, collection_name : str, percentage : float = 0.1):
+    def get_sample_from_collection(self, collection_name : str, percentage : float = 0.1):
 
         collection = self.db[collection_name]
 
@@ -74,6 +74,15 @@ class MongoConnector(BaseConnector):
         sample_count = max(1, int(count * percentage))
 
         return list(collection.aggregate([{"$sample": {"size": sample_count}}]))
+    
+
+    def get_sample(self):
+        collections = self.get_all_tables_or_collections()
+        samples = {}
+        for collection in collections:
+            samples[collection] = self.get_sample_from_collection(collection)
+        
+        return samples
 
 
 

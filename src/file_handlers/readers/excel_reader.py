@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import openpyxl
-from file_handlers.readers.base_reader import BaseFileReader
+from src.file_handlers.readers.base_reader import BaseFileReader
 
 
 
@@ -19,4 +19,4 @@ class ExcelReader(BaseFileReader):
     def parse(self):
         extension = os.path.splitext(self.file_path)[1].lower()
         if extension in _XL_EXTENSIONS:
-            return list(pd.read_excel(self.file_path, nrows=0).columns)
+            return dict(zip(pd.read_excel(self.file_path, nrows=0).columns, list(pd.read_excel(self.file_path, nrows=0).dtypes.astype(str))))

@@ -4,7 +4,7 @@ import sqlite3
 from src.helpers.config import get_settings
 from langgraph.checkpoint .sqlite import SqliteSaver
 from src.agents.data_profiler import data_profiler_node
-from state import AgentState
+from src.graph.state import AgentState
 
 
 settings = get_settings()
