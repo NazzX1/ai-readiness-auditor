@@ -1,3 +1,6 @@
+import json
+
+from src.helpers.utils import PostgresMetadataEncoder, serialize_value
 from src.data_connectors.base_connector import BaseConnector
 from src.models.schema_models import ColumnInfo, TableMetadata
 from sqlalchemy import text, create_engine, inspect
@@ -35,9 +38,13 @@ class PostgresConnector(BaseConnector):
     def get_table_metadata(self, table_name, schema = "public"):
         
         foreign_keys = self.inspector.get_foreign_keys(table_name=table_name, schema=schema)
+        foreign_keys = json.loads(json.dumps(foreign_keys, cls=PostgresMetadataEncoder))
+
+        print(f"\nForeign keys:\n {foreign_keys}")
 
         cols_res = self.inspector.get_columns(table_name=table_name, schema=schema)
-        columns = [ColumnInfo(c.get("name"), c.get("type"), c.get("nullable"), c.get("comment", "")) for c in cols_res]
+        columns = [ColumnInfo(c.get("name"), str(c.get("type")), str(c.get("nullable")), c.get("comment", "")) for c in cols_res]
+        columns = json.loads(json.dumps(columns, cls=PostgresMetadataEncoder))
 
         stats = self._get_table_stats(table_name=table_name)
 
@@ -49,11 +56,16 @@ class PostgresConnector(BaseConnector):
 
 
 
-    def get_sample_from_table(self, table_name : str, percentage : float = 0.1):
-        query = text(f'select * from "{table_name}" TABLESAMPLE SYSTEM(:p)')
+    def get_sample_from_table(self, table_name : str, percentage : float = 10.0):
+        limit = max(10, int(percentage))
+        query = text(f'SELECT * FROM "{table_name}" ORDER BY RANDOM() LIMIT :limit')
         with self.engine.connect() as conn:
-            results = conn.execute(query, {"p": percentage}).fetchall()
-            return [dict(row) for row in results]
+            results = conn.execute(query, {"limit": limit}).fetchall()
+            clean_samples = [
+                {k: serialize_value(v) for k, v in row._mapping.items()}
+                for row in results
+            ]
+            return clean_samples
         
 
     def get_sample(self):

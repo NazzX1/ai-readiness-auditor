@@ -9,6 +9,14 @@ class ColumnInfo:
     is_nullable : bool
     comment : Optional[str] = None
 
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "data_type": str(self.data_type),
+            "is_nullable": self.is_nullable,
+            "comment": self.comment
+        }
+
 
 
 @dataclass
@@ -21,10 +29,16 @@ class TableMetadata:
 
 
 
+@dataclass
+class Metric:
+    name : str
+    description : Optional[str]
+    formula : str
+    pass_threshold : Optional[float] = None
+    fail_threshold : Optional[float] = None
+    warn_threshold : Optional[float] = None
 
-
-
-class Domain(Enum):
+class Scope(Enum):
     AI = "AI"
     ML = "ML"
 

@@ -34,6 +34,16 @@ class Settings(BaseSettings):
     VECTORDB_DISTANCE_METHOD : str
 
 
+    NEO4J_URI : str
+    NEO4J_USER : str
+    NEO4J_PASSWORD : str
+
+    REDIS_HOST : str
+    REDIS_PORT : str
+    REDIS_PASSWORD :str
+    REDIS_DB : int
+
+
     class Config:
         env_file = ".env"
 

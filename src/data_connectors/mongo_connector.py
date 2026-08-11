@@ -1,7 +1,8 @@
 from pymongo import MongoClient
 from src.data_connectors.base_connector import BaseConnector
 from src.models.schema_models import ColumnInfo, TableMetadata
-
+import json 
+from bson import json_util
 
 
 
@@ -73,8 +74,9 @@ class MongoConnector(BaseConnector):
 
         sample_count = max(1, int(count * percentage))
 
-        return list(collection.aggregate([{"$sample": {"size": sample_count}}]))
-    
+        sample = list(collection.aggregate([{"$sample": {"size": sample_count}}]))
+
+        return json.loads(json_util.dumps(sample))
 
     def get_sample(self):
         collections = self.get_all_tables_or_collections()

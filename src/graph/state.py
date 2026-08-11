@@ -1,6 +1,6 @@
 from typing import Annotated, TypedDict, Optional, Union, Any
 from dataclasses import dataclass
-from src.models.schema_models import ColumnInfo, TaskCategory, Domain, SensitivityLevel
+from src.models.schema_models import ColumnInfo, TaskCategory, Scope, SensitivityLevel
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
@@ -39,6 +39,7 @@ class DataMetadata:
     file_type : str
     modality : str
     structure :  Union[StructuredData, SemiStructuredData, UnstructuredData, MediaData]
+    sample : Optional[list]
 
     data_lineage : list[str]
     sensitivity_lvl : SensitivityLevel
@@ -50,6 +51,55 @@ class DataMetadata:
     created_at : str
 
 
+    @classmethod
+    def from_dict(cls, data : dict) -> "DataMetadata":
+        return cls(
+            name = data["name"],
+            description = data["description"],
+            file_type = data["file_type"],
+            modality = data["modality"],
+            structure = data["structure"],
+            sample = data.get("sample"),
+            data_lineage = data.get("data_lineage", []),
+            sensitivity_lvl = SensitivityLevel(data["sensitivity_lvl"]),
+            tags = data.get("tags", []),
+            governance_assessment = data.get("governance_assessment"),
+            size_bytes = data["size_bytes"],
+            created_at = data["created_at"]
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "file_type": self.file_type,
+            "modality": self.modality,
+            "structure": self.structure,
+            "sample": self.sample,
+            "data_lineage": self.data_lineage,
+            "sensitivity_lvl": self.sensitivity_lvl.value if isinstance(self.sensitivity_lvl, SensitivityLevel) else self.sensitivity_lvl,
+            "tags": self.tags,
+            "governance_assessment": self.governance_assessment,
+            "size_bytes": self.size_bytes,
+            "created_at": self.created_at
+        }
+
+
+
+@dataclass
+class ContextualPayload:
+    task : Optional[str] = None
+    domain : Optional[str] = None
+    target_column : Optional[str] = None
+    additional_info : Optional[str] = None
+
+    def to_dict(self) -> dict:
+        return {
+            "task": self.task,
+            "domain": self.domain,
+            "target_column": self.target_column,
+            "additional_info": self.additional_info
+        }
 
 
 
@@ -60,9 +110,17 @@ class AgentState(TypedDict):
     data_source : str
     data_source_params : str
     data_metadata : DataMetadata
-    domain : Domain
+    scope : Scope
+    domain : str
     task_type : TaskCategory
-    contextual_payload : str
+    contextual_payload : ContextualPayload
+    error : str
+
+    evaluation_plan : Any
+    reasoning_trace : Any
+    evaluation_plan : Any
+    llm_analysis : Any
+
 
 
 

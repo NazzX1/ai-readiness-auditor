@@ -1,8 +1,10 @@
 import argparse
 import uuid
-from src.graph.state import initial_state
+from src.graph.state import initial_state, DataMetadata, ContextualPayload, TaskCategory
 from src.graph.workflow import graph 
+from langgraph.types import Command
 from src.data_connectors.DataConnectorEnums import DataConnectorEnums
+
 
 
 def run_session(session_id : str):
@@ -14,7 +16,7 @@ def run_session(session_id : str):
 
     
     print("="*10)
-    print("Learning Accelerator")
+    print("Data Evaluation Auditor")
     print(f"session id : {session_id}")
 
     if is_resume:
@@ -23,7 +25,7 @@ def run_session(session_id : str):
         print("")
     print("="*10)
 
-    x = input("the data source is a database or a file? (press enter to continue)")
+    x = input("the data source is a database or a file? (press enter to continue): ")
     if x in ("yes", "y"):
         db_type = input("database type: ")
         if db_type == "mongo":
@@ -48,16 +50,58 @@ def run_session(session_id : str):
         data_source = DataConnectorEnums.DEFAULT.value
         file_path = input("Enter the path to the file to analyze (press enter to skip): ")
         data_source_params = {"file_path" : file_path}
+    
 
 
     state = initial_state(session_id, data_source,**data_source_params) if not is_resume else None
 
-    config = {"configurable" : {"thread_id" : uuid.uuid4()}}
+    task = input("Enter the task type (press enter to skip): ")
+    target_column = input("Enter the target column if it is required (press enter to skip): ")
+    add_info = input("Enter any additional information (press enter to skip): ")
+
+    state["contextual_payload"] = ContextualPayload(
+        task=TaskCategory(task) if task else None,
+        target_column=target_column if target_column else None,
+        additional_info=add_info if add_info else None
+    ).to_dict()
+    
+
+    config = {"configurable" : {"thread_id" : session_id}}
 
     try:
         result = graph.invoke(state, config=config)
     except Exception as e:
         print(f"\n[ERROR] Could not resume session '{session_id}': {e}")
+        return
+
+
+    while "__interrupt__" in result:
+        payload = result['__interrupt__'][0].value
+
+        raw_profile = payload.get("profile", None)
+
+        profile = (
+            DataMetadata.from_dict(data=raw_profile) if isinstance(raw_profile, dict) else raw_profile
+        )
+
+        if profile:
+            print("=" * 10)
+            print("-"*5,"Proposed Data Profile","-"*5)
+            print(f"Name : {profile.name}")
+            print(f"Description : {profile.description}")
+            print(f"File Type : {profile.file_type}")
+            print(f"Modality : {profile.modality}")
+            print(f"Size (bytes) : {profile.size_bytes}")
+            print(f"Created At : {profile.created_at}")
+        
+        print(f"\n{payload.get("prompt", "continue?")}")
+        user_input = input(">> ").strip()
+
+        result = graph.invoke(Command(resume=user_input), config=config)
+
+
+    if result.get("error"):
+        print(f"\n[Error] {result["error"]}")
         return
 
 

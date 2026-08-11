@@ -59,7 +59,11 @@ class FileConnector(BaseConnector):
 
 
     def get_sample(self, table_name : str = "", limit : int = 10):
-        return self.reader.read().head(limit)
+        df = self.reader.read()
+        if hasattr(df, 'head'):
+            df = df.head(limit)
+            return df.to_dict('records') if hasattr(df, 'to_dict') else []
+        return []
     
 
     
