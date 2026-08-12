@@ -7,7 +7,7 @@ from src.agents.data_profiler import data_profiler_node
 from src.agents.ml_evaluation_planner import ml_evaluation_planner_node
 from src.agents.human_approval import human_approval_node
 from src.agents.executor import executor_node
-
+from src.agents.evaluator import evaluator_node
 from src.graph.state import AgentState
 
 
@@ -30,6 +30,7 @@ def build_graph(db_path : str, interrupt_before : list | None = None):
     builder.add_node("human_approval", human_approval_node)
     builder.add_node("ml_evaluation_planner", ml_evaluation_planner_node)
     builder.add_node("executor", executor_node)
+    builder.add_node("evaluator", evaluator_node)
 
 
 
@@ -45,7 +46,8 @@ def build_graph(db_path : str, interrupt_before : list | None = None):
         }
     )
     builder.add_edge("ml_evaluation_planner", "executor")
-    builder.add_edge("executor", END)
+    builder.add_edge("executor", "evalautor")
+    builder.add_edge("evaluator", END)
 
 
     conn = sqlite3.connect(db_path, check_same_thread=False)

@@ -188,11 +188,9 @@ def executor_node(state: AgentState) -> dict:
 
     user_prompt = f"""Dataset Session ID: '{session_id}'
 
-        Available Tables & Columns:
-        {json.dumps(table_schema, indent=2)}
+        Available Tables & Columns:{json.dumps(table_schema, indent=2)}
 
-        Target Columns and Requested Metrics:
-        {json.dumps(met_to_cols, indent=2)}
+        Target Columns and Requested Metrics:{json.dumps(met_to_cols, indent=2)}
 
         Compute the metrics for the given target columns using available tools.
     """

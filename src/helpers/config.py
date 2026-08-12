@@ -11,6 +11,14 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL : str
     PROFILER_TEMP : float
     ML_PLANNER_TEMP : float
+    EXECUTOR_TEMP : float
+    EVALUATOR_TEMP : float
+
+    EMBEDDING_MODEL : str
+    EMBEDDING_BASE_URL : str
+
+
+
     
         
     UPLOADED_DATA : str

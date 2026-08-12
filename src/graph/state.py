@@ -121,6 +121,8 @@ class AgentState(TypedDict):
     evaluation_plan : Any
     llm_analysis : Any
 
+    execution_results : Any
+
 
 
 
@@ -136,7 +138,13 @@ def initial_state(session_id : str, data_source : str, **data_source_params):
         "data_metadata" : None,
         "domain" :  None,
         "task_type" : None,
-        "contextual_payload" : ""
+        "contextual_payload" : "",
+        "error" : "",        
+        "evaluation_plan" : None,
+        "reasoning_trace" : None,
+        "evaluation_plan" : None,
+        "llm_analysis" : None,
+        "execution_results" : None
     }
     
 
