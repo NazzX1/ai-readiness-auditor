@@ -24,10 +24,10 @@ def build_evaluator_llm() -> ChatOllama:
         base_url=settings.OLLAMA_BASE_URL,
         temperature=settings.EVALUATOR_TEMP,
         format="json"
-    ).bind_tools()
+    )
 
 
-async def create_store():
+def create_store():
     return QdrantDB(
         settings = settings
     )
@@ -79,22 +79,25 @@ Required JSON Schema:
 
 
 
-def perform_web_research(columns: List[str]) -> str:
-    if not columns:
-        return "No specific columns identified for research."
+def perform_web_research(queries: List[str]) -> str:
+    print(f"[EVALUATOR]: Performing web search...")
+    if not queries:
+        print("[EVALUATOR]: No queries found for the web researcher")
+        return "No specific metrics identified for web research."
 
-    query_cols = ", ".join(columns)
-    search_query = f"industry standard data quality thresholds for fields: {query_cols}"
+    combined_context = []
+    for query in queries[:2]:  
+        try:
+            print(f"[EVALUATOR]: Running web research for: '{query}'...")
+            results = web_search_tool.invoke(query)
+            combined_context.append(f"Query [{query}]: {str(results)[:600]}")
+        except Exception as e:
+            print(f"[EVALUATOR]: Web research warning for '{query}': {e}")
 
-    try:
-        print(f"[EVALUATOR]: Running web research: '{search_query}'...")
-        results = web_search_tool.invoke(search_query)
-        return str(results)[:1200]
-    except Exception as e:
-        print(f"[EVALUATOR]: Web research warning: {e}")
-        return "Web research context unavailable."
-    
-async def evaluator_node(state: AgentState) -> dict:
+    return "\n\n".join(combined_context) if combined_context else "Web research context unavailable."
+
+
+def evaluator_node(state: AgentState) -> dict:
     print("[EVALUATOR]: Starting Evaluation Node...")
 
     session_id = state.get("session_id", "")
@@ -112,27 +115,51 @@ async def evaluator_node(state: AgentState) -> dict:
         }
         return {"evaluation_report": fallback_report, "messages": []}
 
-    vectordb = await create_store()
+    print(f"[EVALUATOR] execution_results:\n {execution_results}")
+
+    if isinstance(execution_results, dict):
+        results_list = execution_results.get("results", [])
+    elif isinstance(execution_results, list):
+        results_list = execution_results
+    else:
+        results_list = []
+
+
+    vector_queries = []
+    web_queries = []
+
+    print(f"[EVALUATOR]: metrics:\n {results_list}")
+
+    for item in results_list:
+        if not isinstance(item, dict):
+            continue
+
+        table = item.get("table", "")
+        col = item.get("column") or "all columns"
+        desc = item.get("description", "")
+        metric = item.get("requested_metric", "").strip()
+
+        if metric:
+
+            vector_queries.append(f"{desc} for table '{table}' column '{col}'")
+
+            web_queries.append(f"industry benchmark for {metric} in table {table} column {col}")
+
+    vector_queries = list(dict.fromkeys(vector_queries))
+    web_queries = list(dict.fromkeys(web_queries))
+
+    if not vector_queries:
+        vector_queries = ["relational database data quality evaluation metrics completeness uniqueness validity"]
 
     paper_chunks = []
+    vectordb = create_store()
     try:
-        search_queries = []
-        for item in execution_results.values():
-            if isinstance(item, dict):
-                col = item.get("column", "")
-                metric = item.get("metric_name", "data quality")
-                if col:
-                    search_queries.append(f"data quality benchmark for '{col}' metric '{metric}'")
-
-        if not search_queries:
-            search_queries = ["general data quality evaluation benchmarks"]
-
-        for query in list(set(search_queries))[:3]:
-            print(f"[EVALUATOR]: Searching Vector KB for: '{query}'...")
-            hits = await vectordb.search_by_text(
+        for query in vector_queries[:3]:
+            print(f"[EVALUATOR]: Searching Vector KB for concept: '{query}'...")
+            hits = vectordb.search_by_text(
                 collection_name="ml_related_papers",
                 query_text=query,
-                top_k=2
+                top_k=2,
             )
             for hit in hits:
                 payload = hit.get("payload", {})
@@ -140,36 +167,27 @@ async def evaluator_node(state: AgentState) -> dict:
                 source = payload.get("source", "Research Paper")
                 if text:
                     paper_chunks.append(f"[Source: {source}]: {text.strip()}")
-
     except Exception as e:
         print(f"[EVALUATOR]: Qdrant vector search error: {e}")
     finally:
-        await vectordb.disconnect()
+        vectordb.disconnect()
 
-    target_columns = list(
-        {
-            item.get("column")
-            for item in execution_results.values()
-            if isinstance(item, dict) and item.get("column")
-        }
-    )
-    web_context = perform_web_research(target_columns)
+    web_context = perform_web_research(web_queries)
 
     llm = build_evaluator_llm()
 
     user_prompt = f"""Dataset Session ID: '{session_id}'
-
     Computed Execution Metric Results:{json.dumps(execution_results, indent=2)}
 
     Original Evaluation Plan:{json.dumps(eval_plan, indent=2)}
 
-    Retrieved Research Paper Chunks (Vector KB):{json.dumps(paper_chunks, indent=2)}
+    Retrieved Research Paper Chunks (Vector KB): {json.dumps(paper_chunks, indent=2)}
 
     Web Research Context:
     {web_context}
 
     Audit all computed metrics against the paper excerpts and web context. Provide semantic evaluations, a plan score (0 to 10), and actionable dataset remediation recommendations. Return strictly valid JSON inside ```json blocks.
-"""
+    """
 
     messages = [
         SystemMessage(content=EVALUATOR_SYSTEM_PROMPT),
@@ -180,7 +198,7 @@ async def evaluator_node(state: AgentState) -> dict:
     response = None
     try:
         response = llm.invoke(messages)
-        report_data = response.content
+        report_data = json.loads(response.content)
     except Exception as err:
         print(f"[EVALUATOR]: Failed to parse JSON or invoke LLM ({err}). Returning fallback dictionary.")
         report_data = {
@@ -193,6 +211,7 @@ async def evaluator_node(state: AgentState) -> dict:
             ],
         }
 
+    print(f"[EVALUATOR] report:\n {report_data}")
     score = report_data.get("plan_score", 0)
     status = report_data.get("plan_status", "NEEDS_REVISION")
     print(f"[EVALUATOR]: Audit complete. Score: {score}/10 | Status: {status}")
@@ -201,6 +220,3 @@ async def evaluator_node(state: AgentState) -> dict:
         "evaluation_report": report_data,
         "messages": [response] if response else [],
     }
-
-
-

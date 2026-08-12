@@ -56,3 +56,24 @@ def serialize_value(val):
         if isinstance(val, bytes):
             return val.decode("utf-8", errors="ignore")
         return val
+
+
+import json
+import re
+
+def parse_llm_json(content: str) -> dict:
+    if not isinstance(content, str):
+        content = str(content)
+
+    cleaned = content.replace("\xa0", " ").strip()
+
+    match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+    if match:
+        cleaned = match.group(1).strip()
+
+    if not (cleaned.startswith("{") or cleaned.startswith("[")):
+        json_match = re.search(r"(\{[\s\S]*\}|\[[\s\S]*\])", cleaned)
+        if json_match:
+            cleaned = json_match.group(1).strip()
+
+    return json.loads(cleaned)

@@ -13,6 +13,7 @@ import pandas as pd
 
 from src.graph.state import AgentState, DataMetadata
 from src.helpers.config import get_settings
+from src.helpers.utils import parse_llm_json
 
 from src.mcp_servers.metrics_server import (
     compute_completeness_tool,
@@ -82,7 +83,6 @@ def build_executor_llm() -> ChatOllama:
 
 TOOL_MAP = {getattr(tool, "name", getattr(tool, "__name__", str(tool))): tool
             for tool in EXECUTOR_TOOLS}
-print(F"[EXECUTOR]:\n {TOOL_MAP}")
 
 
 EXECUTOR_SYSTEM_PROMPT = """You are an expert Data Evaluation Executor Agent.
@@ -120,7 +120,8 @@ Use the following JSON structure for your final response:
   "results": [
     {
       "table": "<table_name>",
-      "column": "<column_name>",
+      "column": "<column_name> instead of null put all",
+      "description" : "<metric_description>
       "requested_metric": "<original_metric_name>",
       "executed_tool": "<tool_name_used>",
       "value": <computed_value_or_null>,
@@ -139,6 +140,8 @@ def extract_metrics_by_column(data: Any) -> Dict[str, List[str]]:
     col_metrics = defaultdict(list)
     metric_items = []
 
+    print(f"[EXECUTOR]: metrics:\n {data}")
+
     if isinstance(data, (tuple, list)):
         for group in data:
             if isinstance(group, list):
@@ -151,13 +154,14 @@ def extract_metrics_by_column(data: Any) -> Dict[str, List[str]]:
     for item in metric_items:
         metric_name = item.get("metric_name")
         target_cols = item.get("target_columns", [])
+        desc = item.get("reasoning", "")
 
         if not metric_name or not target_cols:
             continue
 
         for col in target_cols:
             if metric_name not in col_metrics[col]:
-                col_metrics[col].append(metric_name)
+                col_metrics[col].append({metric_name : desc})
 
     return dict(col_metrics)
 
@@ -174,6 +178,9 @@ def executor_node(state: AgentState) -> dict:
     )
 
     met_to_cols = extract_metrics_by_column(metrics_raw)
+
+    print("-"*10)
+    print(f"[Executor]:\n {met_to_cols}")
 
     dataframes = store.get_samples_as_dataframes(session_id=session_id)
     if not dataframes:
@@ -233,10 +240,13 @@ def executor_node(state: AgentState) -> dict:
                     result_payload = {
                         "status": "success",
                         "metric_name": tool_name,
+                        "desc" : [ i[tool_name] for i in met_to_cols[col]], 
                         "column": col,
                         "table": table,
                         "value": computed_value,
                     }
+
+                    print(f"[EXECUTOR]:payload\n {result_payload}")
                 except Exception as e:
                     computed_value = None
                     result_payload = {
@@ -263,7 +273,7 @@ def executor_node(state: AgentState) -> dict:
                     tool_call_id=tool_call["id"],
                 )
             )
-
+        llm.bind(format="json")
         response = llm.invoke(messages)
         messages.append(response)
 
@@ -271,6 +281,7 @@ def executor_node(state: AgentState) -> dict:
     print(response.content)
 
     return {
-        "execution_results": execution_results,
+        "execution_results": parse_llm_json(response.content),
+
         "messages": messages,
     }

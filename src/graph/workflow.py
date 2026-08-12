@@ -46,7 +46,7 @@ def build_graph(db_path : str, interrupt_before : list | None = None):
         }
     )
     builder.add_edge("ml_evaluation_planner", "executor")
-    builder.add_edge("executor", "evalautor")
+    builder.add_edge("executor", "evaluator")
     builder.add_edge("evaluator", END)
 
 

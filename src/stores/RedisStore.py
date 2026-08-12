@@ -2,6 +2,7 @@ import json
 from typing import List, Dict, Any, Optional, Tuple
 import redis
 import pandas as pd
+from src.helpers.utils import PostgresMetadataEncoder
 
 class RedisStore:
 
@@ -35,7 +36,7 @@ class RedisStore:
         key = self._get_key(session_id)
         ttl = ttl_seconds if ttl_seconds is not None else self.default_ttl
 
-        payload = json.dumps(samples)
+        payload = json.dumps(samples, cls = PostgresMetadataEncoder)
 
         return self.client.setex(name=key, time=ttl, value=payload)
 
